@@ -6,29 +6,81 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/editor.md/css/editormd.min.css" />
     <style>
         body, html { margin: 0; height: 100%; }
-        #editor { height: 100%; }
+        #editor { height: calc(100% - 50px); }
+        #saveBtn {
+            height: 50px;
+            width: 100%;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            font-size: 18px;
+        }
     </style>
 </head>
 <body>
-    <div id="editor">
-        <textarea style="display:none;"># 欢迎来到你的在线笔记本
 
-这是一个支持 **富文本 + Markdown** 的在线编辑器。
+<button id="saveBtn">保存到 GitHub</button>
 
-你可以开始写你的散文了。
-        </textarea>
-    </div>
+<div id="editor">
+    <textarea style="display:none;"># 欢迎来到你的在线笔记本
 
-    <script src="https://cdn.jsdelivr.net/npm/jquery/dist/jquery.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/editor.md/editormd.min.js"></script>
+开始写你的散文吧。
+    </textarea>
+</div>
 
-    <script>
-        var editor = editormd("editor", {
-            width: "100%",
-            height: "100%",
-            path: "https://cdn.jsdelivr.net/npm/editor.md/lib/",
-            saveHTMLToTextarea: true,
+<script src="https://cdn.jsdelivr.net/npm/jquery/dist/jquery.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/editor.md/editormd.min.js"></script>
+
+<script>
+    var editor = editormd("editor", {
+        width: "100%",
+        height: "100%",
+        path: "https://cdn.jsdelivr.net/npm/editor.md/lib/",
+        saveHTMLToTextarea: true,
+    });
+
+    async function saveToGitHub() {
+        const token = "ghp_trMU4CezVeX8edtCAPFuaGft80fKTjx";
+        const username = "AkiharaHoshina";
+        const repo = "hoshinanote";
+        const path = "notes.md";  // 保存的文件名
+        const content = btoa(unescape(encodeURIComponent(editor.getMarkdown())));
+
+        const url = `https://api.github.com/repos/${username}/${repo}/contents/${path}`;
+
+        // 获取当前文件的 SHA（更新文件需要）
+        let sha = null;
+        const getResp = await fetch(url, {
+            headers: { Authorization: `Bearer ${token}` }
         });
-    </script>
+        if (getResp.status === 200) {
+            const data = await getResp.json();
+            sha = data.sha;
+        }
+
+        // 提交更新
+        const resp = await fetch(url, {
+            method: "PUT",
+            headers: {
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                message: "update notes",
+                content: content,
+                sha: sha
+            })
+        });
+
+        if (resp.status === 201 || resp.status === 200) {
+            alert("已保存到 GitHub！");
+        } else {
+            alert("保存失败：" + resp.status);
+        }
+    }
+
+    document.getElementById("saveBtn").onclick = saveToGitHub;
+</script>
+
 </body>
 </html>
