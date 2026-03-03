@@ -1,0 +1,203 @@
+# 📘 Pocket4 + EC25 4G 排障全过程总结（Markdown 可直接复制版）
+
+## 🧩 1. 初始症状（问题表现）
+- 拨号“成功”但接口始终 `DOWN`
+- `raw-ip` 设置失败
+- `qmicli` 报 `Internal` / `CID allocation failed`
+- `ModemManager` 找不到 modem
+- `cdc_mbim` 不断 register/unregister
+- `Tx URB error -19`
+- ttyUSB 无法打开
+
+### 🔍 根因  
+**EC25 USB 链路不稳定 → QMI 控制端口半初始化 → NetworkManager 无法激活接口。**
+
+---
+
+## 🧩 2. USB 链路恢复（关键突破）
+通过以下操作恢复 USB：
+
+```bash
+sudo usb_modeswitch -v 2c7c -p 0125 -R
+```
+
+恢复后出现：
+
+- `/dev/ttyUSB0–3`
+- `/dev/cdc-wdm3`
+- `wwan` 接口
+
+说明模块恢复正常。
+
+---
+
+## 🧩 3. 切换到 MBIM 模式（最关键成功点）
+EC25 在 Linux 下 **MBIM 模式最稳定**。
+
+AT 指令：
+
+```
+AT+QCFG="usbnet",2
+AT+CFUN=1,1
+```
+
+重启后出现：
+
+```
+cdc_mbim
+wwp197s0f4u1i4
+```
+
+---
+
+## 🧩 4. NetworkManager 绑定错误接口（导致无法激活）
+你遇到：
+
+- 绑定到 lo  
+- 绑定到 enp196s0  
+- mismatching interface name  
+
+原因：
+
+**4G profile 没有绑定到正确的 wwan 接口。**
+
+---
+
+## 🧩 5. 正确绑定接口并成功拨号
+示例（移动）：
+
+```bash
+nmcli c add type gsm ifname "wwp197s0f4u1i4" con-name 4g apn cmnet
+nmcli c up 4g
+```
+
+成功后看到：
+
+```
+inet 10.x.x.x
+inet6 2409:xxxx
+UP, LOWER_UP
+```
+
+说明 4G 已完全连上。
+
+---
+
+## 🧩 6. 设置开机自动连接
+
+```bash
+nmcli connection modify 4g connection.autoconnect yes
+```
+
+---
+
+# 📘 EC25 4G 模块维护常用指令大全（Markdown 可直接复制版）
+
+下面是你以后最常用的命令，按类别整理。
+
+---
+
+# 🟦 A. NetworkManager（最常用）
+
+### 查看设备
+```bash
+nmcli device
+```
+
+### 查看所有连接
+```bash
+nmcli connection show
+```
+
+### 创建 4G 连接（MBIM）
+```bash
+nmcli c add type gsm ifname "wwp197s0f4u1i4" con-name 4g apn cmnet
+```
+
+### 启动 4G
+```bash
+nmcli c up 4g
+```
+
+### 停止 4G
+```bash
+nmcli c down 4g
+```
+
+### 开机自动连接
+```bash
+nmcli connection modify 4g connection.autoconnect yes
+```
+
+### 查看默认路由（判断 Wi‑Fi/4G 优先级）
+```bash
+ip route get 8.8.8.8
+```
+
+---
+
+# 🟦 B. MBIM / QMI 调试
+
+### 查看 MBIM 状态
+```bash
+mbimcli -d /dev/cdc-wdm3 --query-device-caps
+```
+
+### 查看 QMI 数据格式
+```bash
+qmicli -d /dev/cdc-wdm3 --device-open-proxy --wda-get-data-format
+```
+
+### 设置 RAW-IP（QMI 模式）
+```bash
+qmicli -d /dev/cdc-wdm3 --device-open-proxy --wda-set-data-format=raw-ip
+```
+
+---
+
+# 🟦 C. AT 指令（EC25 专用）
+
+### 打开 AT 端口
+```bash
+sudo screen /dev/ttyUSB2 115200
+```
+
+### 测试
+```
+AT
+```
+
+### 切换到 MBIM 模式
+```
+AT+QCFG="usbnet",2
+```
+
+### 切换到 QMI 模式
+```
+AT+QCFG="usbnet",1
+```
+
+### 重启模块
+```
+AT+CFUN=1,1
+```
+
+---
+
+# 🟦 D. USB / 内核调试（Pocket4 特别重要）
+
+### 查看 USB 设备
+```bash
+lsusb
+```
+
+### 查看内核日志
+```bash
+dmesg -w
+```
+
+### 强制重置 EC25（非常有用）
+```bash
+sudo usb_modeswitch -v 2c7c -p 0125 -R
+```
+
